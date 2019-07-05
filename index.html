@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="./style.css">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="./chart.js"></script>
+
+    <script>
+
+        let projectsMap = new Map();
+        let pmMap = new Map();
+        let mapUser = new Map();
+        let mapProj = new Map();
+        let dataT = []; // массив в котором хранятся данные
+        let tableHeader = '<tr>' +
+                    '<th>Название проекта</th>' +
+                    '<th>Платежный метод</th>' +
+                    '<th>Дата</th>' +
+                    '<th>Статус</th>' +
+                    '<th>Пользователь</th>' +
+                    '<th>Валюта платежа</th>' +
+                    '<th>Сумма</th>' +
+                    '<th>Товары</th>' +
+                    '</tr>';
+
+        //Функция для выбора эллемента в селекте
+        function selectElement(id, valueToSelect) {
+            var element = document.getElementById(id);
+            element.value = valueToSelect;
+        }
+
+        //Функция, которая выбирает все проекты
+        function handleTrans(trans) {
+            let pName = trans.project.name;
+            projectsMap.set(pName, 1);
+        }
+
+        //Функция для подготовки строки покупки html
+        function renderPurchase(purchase) {
+            let purchaseString = '';
+            if (purchase.virtual_currency.amount > 0) {
+                purchaseString += 'Вирт. вал: ' + purchase.virtual_currency.amount + ' ' + purchase.virtual_currency.name + '</br>';
+            }
+            if (purchase.virtual_items != null && purchase.virtual_items != '') {
+                purchaseString += 'Вирт. товары: ' + purchase.virtual_items + '</br>';
+            }
+            if (purchase.simple_checkout.amount > 0) {
+                purchaseString += 'Вирт. вал. э: ' + purchase.simple_checkout.amount + ' ' + purchase.simple_checkout.currency + '</br>';
+            }
+            if (purchase.pin_codes.amount != null && purchase.pin_codes.amount > 0) {
+                purchaseString += 'Ключ: ' + purchase.pin_codes.amount + ' ' + purchase.pin_codes.currency + ' ' + purchase.pin_codes.content + '</br>';
+            }
+            if (purchase.subscription.name != null && purchase.subscription.name != '') {
+                purchaseString += 'Подписка: ' + purchase.subscription.name;
+            }
+            return purchaseString;
+        }
+
+        //Функция, которая готовит строку для таблицы
+        function renderRow(item) {
+            let transaction = item.transaction;
+            let user = item.user;
+            let payment_details = item.payment_details;
+            let purchase = item.purchase;
+
+            let pName = transaction.project.name;
+            let paymentMethodName = transaction.payment_method.name;
+            let transactionDate = transaction.transfer_date;
+            let transactionStatus = transaction.status;
+            let usersId = user.id;
+            let paymentCurrency = payment_details.payment.currency;
+            let paymentAmount = payment_details.payment.amount;
+
+            return '<tr><td>' + pName + '</td>'
+                + '<td>' + paymentMethodName + '</td>'
+                + '<td>' + transactionDate + '</td>'
+                + '<td>' + transactionStatus + '</td>'
+                + '<td>' + usersId + '</td>'
+                + '<td>' + paymentCurrency + '</td>'
+                + '<td>' + paymentAmount + '</td>'
+                + '<td>' + renderPurchase(purchase) + '</td></tr>';
+        }
+
+        //Функция для подготовки рейтинга платежных систем
+        function paymentMethodRating(transaction) {
+            let pmName = transaction.payment_method.name;
+            if (pmMap.has(pmName)) {
+                let newValue = pmMap.get(pmName) + 1;
+                pmMap.set(pmName, newValue);
+            }
+            else {
+                pmMap.set(pmName, 1);
+            }
+        }
+
+        //Функция для подготовки основного массива данных (транзакций)
+        function prepareData(item) {
+            let transaction = item.transaction;
+            let user = item.user;
+            let payment_details = item.payment_details;
+            let purchase = item.purchase;
+
+            let pName = transaction.project.name;
+            let paymentMethodName = transaction.payment_method.name;
+            let transactionDate = transaction.transfer_date;
+            let transactionStatus = transaction.status;
+            let usersId = user.id;
+            let paymentCurrency = payment_details.payment.currency;
+            let paymentAmount = payment_details.payment.amount;
+
+            mapUser.set(usersId, 1);
+            mapProj.set(pName, 1);
+
+            var arr = [pName, paymentMethodName, transactionDate, transactionStatus, usersId, paymentCurrency, paymentAmount, renderPurchase(purchase)];
+            dataT.push(arr);
+        }
+
+        //Функция для фильтрации по названию проекта
+        function filterProj(nameProj) { 
+            selectElement('usersS', 'Все пользователи');
+            let result = [];//записываем в данный массив отфильтрованные данные
+            if (nameProj == 'Все проекты') {
+                result = dataT;
+            }
+            else {
+                for (let elem of dataT) { //elem это элементы в массиве. В цикле перебераем все эллементы и находим нужные
+                    if (elem[0] == nameProj) {
+                        result.push(elem);
+                    }
+                }
+            }
+            renderData(result);
+        }
+        
+        //Функция для фильтрации по пользователю
+        function filterUsers(nameUser) { 
+            selectElement('projS', 'Все проекты');
+            let result = [];
+            if (nameUser == 'Все пользователи') {
+                result = dataT;
+            }
+            else {
+                for (let elem of dataT) { //elem это элементы в массиве. В цикле перебераем все эллементы и находим нужные
+                    if (elem[4] == nameUser) {
+                        result.push(elem);
+                    }
+                }
+            }
+            renderData(result);
+        }
+
+        //Функция рисуем данные в таблицу
+        function renderData(data) {
+            let rows = tableHeader;
+            for (let elem of data) {
+                rows += '<tr><td>' + elem[0] + '</td>'
+                    + '<td>' + elem[1] + '</td>'
+                    + '<td>' + elem[2] + '</td>'
+                    + '<td>' + elem[3] + '</td>'
+                    + '<td>' + elem[4] + '</td>'
+                    + '<td>' + elem[5] + '</td>'
+                    + '<td>' + elem[6] + '</td>'
+                    + '<td>' + elem[7] + '</td></tr>';
+            }
+            document.getElementById('transactionTable').innerHTML = rows;
+        }
+
+        var request;
+        //Готовим запрос на чтение данные из JSON файла
+        if (window.XMLHttpRequest) {
+            request = new XMLHttpRequest();
+        } else {
+            request = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        request.open('GET', './assets/data.json');
+        
+        //Обработка данных из JSON файла
+        request.onreadystatechange = function () {
+            console.log("onreadystatechange " + request.readState);
+            if ((request.readyState === 4) && (request.status === 200)) {
+                var items = JSON.parse(request.responseText); 
+
+                let rows = tableHeader; //Заголовок таблицы
+                
+                //Цикл для обработки JSON объектов
+                for (var key in items) {
+                    var transaction = items[key].transaction;
+                    handleTrans(transaction);
+                    paymentMethodRating(transaction);
+                    prepareData(items[key]);
+                    rows += renderRow(items[key]);
+                }
+                document.getElementById('transactionTable').innerHTML = rows;
+
+                //Готовим select для фильтрации по проектам
+                let selectProj = document.getElementById('projS');
+                let vse = document.createElement('option');
+                vse.text = 'Все проекты';
+                selectProj.add(vse)
+                for (let key of mapProj.keys()) {
+                    let opt = document.createElement('option');
+                    opt.text = key;
+                    selectProj.add(opt);
+                }
+                selectProj.addEventListener("change", function () {
+                    filterProj(selectProj.value);
+                });
+
+                //Готовим select для фильтрации по пользователям
+                let selectUsers = document.getElementById('usersS');
+                let vseU = document.createElement('option');
+                vseU.text = 'Все пользователи';
+                selectUsers.add(vseU);
+                for (let key of mapUser.keys()) {
+                    let opt = document.createElement('option');
+                    opt.text = key;
+                    selectUsers.add(opt);
+                }
+                selectUsers.addEventListener("change", function () {
+                    console.log(selectUsers.value);
+                    filterUsers(selectUsers.value);
+                });
+
+                //Рисуем список проектов
+                var output = '<ul>';
+                for (let key of projectsMap.keys()) {
+                    output += '<li>' + key + '</li>';
+                }
+                output += '</ul>';
+                document.getElementById('update').innerHTML = output;
+
+                //Рисуем рейтинг платежных систем
+                pmMap = new Map([...pmMap.entries()].sort((a, b) => b[1] - a[1])); //сортировка по убыванию
+                let dataArr = [];
+                var paymentMethods = '<ul>';
+                for (let elem of pmMap) {
+                    paymentMethods += '<li>' + elem[0] + ', ' + elem[1] + '</li>';
+                    dataArr.push([elem[0], elem[1]]);
+                }
+                paymentMethods += '</ul>';
+                document.getElementById('update1').innerHTML = paymentMethods;
+                
+                //Рисуем график
+                drawChart('#chart', dataArr);
+            }
+        }
+        request.send();   
+    </script>
+</head>
+
+<body>
+    <div style="display: flex;" >
+        <div class="container">
+            <h3>Список проектов</h3>
+            <div id="update" class="container"></div>
+        </div>
+
+        <div class="container">
+            <h3>Рейтинг платежных систем</h3>
+            <div id="update1" class="container"></div>
+        </div>
+        <div class="container" id="chart"></div>
+    </div>
+    <div>
+        <select id="projS"></select>
+        <select id="usersS"></select>
+    </div>
+    <table id="transactionTable" class="bordered"></table>
+</body>
+
+</html>
